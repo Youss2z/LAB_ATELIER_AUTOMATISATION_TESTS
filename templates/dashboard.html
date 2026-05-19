@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard QoS — Monitoring API</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background-color: #f8f9fa; margin: 0; padding: 24px; color: #333; }
+    .container { max-width: 1100px; margin: 0 auto; }
+    h1, h2 { color: #1a202c; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+    .btn { display: inline-block; background-color: #0066cc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-weight: bold; margin-bottom: 24px; cursor: pointer; border: none; }
+    .btn:hover { background-color: #004c99; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .card { background: white; padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 5px solid #cbd5e1; }
+    .card.success { border-left-color: #22c55e; }
+    .card.danger { border-left-color: #ef4444; }
+    .card-title { font-size: 14px; text-transform: uppercase; color: #64748b; margin-bottom: 6px; font-weight: bold; }
+    .card-value { font-size: 24px; font-weight: bold; color: #1e293b; }
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 32px; }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+    th { background-color: #f1f5f9; color: #475569; font-weight: 600; }
+    .badge { inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+    .badge.pass { background-color: #dcfce7; color: #166534; }
+    .badge.fail { background-color: #fee2e2; color: #991b1b; }
+    .details-box { background-color: #f8fafc; font-family: monospace; font-size: 12px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; color: #475569; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Tableau de bord de surveillance d'API</h1>
+  <p>Métrologie continue et validation du contrat d'interface de l'API séléctionnée.</p>
+  
+  <a href="/run" target="_blank" class="btn">Déclencher un run de test synchrone (/run)</a>
+
+  {% if runs %}
+    <h2>Dernier état de santé mesuré (Run #{{ runs[0].id }})</h2>
+    <p><em>Exécuté le : {{ runs[0].timestamp }} pour {{ runs[0].api_name }}</em></p>
+    
+    <div class="metrics-grid">
+      <div class="card {% if runs[0].failed_count == 0 %}success{% else %}danger{% endif %}">
+        <div class="card-title">Disponibilité du Run</div>
+        <div class="card-value">{{ ((runs[0].passed_count / (runs[0].passed_count + runs[0].failed_count)) * 100)|round(1) }} %</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Taux d'erreur (QoS)</div>
+        <div class="card-value">{{ (runs[0].error_rate * 100)|round(1) }} %</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Latence Moyenne</div>
+        <div class="card-value">{{ runs[0].latency_avg }} ms</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Latence Percentile 95</div>
+        <div class="card-value">{{ runs[0].latency_p95 }} ms</div>
+      </div>
+    </div>
+
+    <h3>Détails des assertions du dernier run</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Nom de l'assertion</th>
+          <th>Statut</th>
+          <th>Latence d'exécution</th>
+          <th>Détails / Contrat technique</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for test in runs[0].tests %}
+        <tr>
+          <td><strong>{{ test.test_name }}</strong></td>
+          <td>
+            <span class="badge {% if test.status == 'PASS' %}pass{% else %}fail{% endif %}">
+              {{ test.status }}
+            </span>
+          </td>
+          <td>{{ test.latency_ms }} ms</td>
+          <td><div class="details-box">{{ test.details }}</div></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>Historique des exécutions (Persistance SQLite)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID Run</th>
+          <th>Horodatage (ISO)</th>
+          <th>Succès / Échecs</th>
+          <th>Taux Erreur</th>
+          <th>Latence Moyenne</th>
+          <th>Latence P95</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in runs %}
+        <tr>
+          <td>#{{ r.id }}</td>
+          <td>{{ r.timestamp }}</td>
+          <td>{{ r.passed_count }} PASS / {{ r.failed_count }} FAIL</td>
+          <td>{{ (r.error_rate * 100)|round(1) }} %</td>
+          <td>{{ r.latency_avg }} ms</td>
+          <td>{{ r.latency_p95 }} ms</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+  {% else %}
+    <div class="card" style="border-left-color: #eab308;">
+      <div class="card-title">Aucune donnée disponible</div>
+      <div class="card-value" style="font-size: 18px;">Aucun run n'a encore été enregistré en base SQLite. Veuillez cliquer sur le bouton ci-dessus pour initialiser le premier run.</div>
+    </div>
+  {% endif %}
+</div>
+
+</body>
+</html>
